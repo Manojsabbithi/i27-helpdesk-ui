@@ -80,7 +80,7 @@ pipeline {
                 // Setting the gateway url on the TARGET_ENV selection
                 switch(params.TARGET_ENV)  {
                     case 'dev': 
-                        env.NEXT_PUBLIC_API_BASE_URL = 'http://34.9.152.246:8080'
+                        env.NEXT_PUBLIC_API_BASE_URL = 'http://35.199.44.17:8080' // We need to provide the gateway details here
                         break
                     case 'test': 
                         env.NEXT_PUBLIC_API_BASE_URL = 'http://test-gateway.i27helpdesk.in'
