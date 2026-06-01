@@ -79,17 +79,17 @@ pipeline {
 
                 // Setting the gateway url on the TARGET_ENV selection
                 switch(params.TARGET_ENV)  {
-                    case 'dev': 
-                        env.NEXT_PUBLIC_API_BASE_URL = 'http://34.181.165.38' // We need to provide the gateway details here
+                    case 'dev':
+                        env.NEXT_PUBLIC_API_BASE_URL = 'https://gateway.i27helpdesk.in'
                         break
-                    case 'test': 
-                        env.NEXT_PUBLIC_API_BASE_URL = 'http://test-gateway.i27helpdesk.in'
+                    case 'test':
+                        env.NEXT_PUBLIC_API_BASE_URL = 'https://test-gateway.i27helpdesk.in'
                         break
                     case 'stage':
-                        env.NEXT_PUBLIC_API_BASE_URL = 'http://stage-gateway.i27helpdesk.in'
+                        env.NEXT_PUBLIC_API_BASE_URL = 'https://stage-gateway.i27helpdesk.in'
                         break
                     case 'prod':
-                        env.NEXT_PUBLIC_API_BASE_URL = 'http://gateway.i27helpdesk.in'
+                        env.NEXT_PUBLIC_API_BASE_URL = 'https://gateway.i27helpdesk.in'
                         break
                 }
 

@@ -1,0 +1,36 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: i27-helpdesk-ui
+  namespace: ${NAMESPACE}
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - i27helpdesk.in
+        - prod.i27helpdesk.in
+      secretName: i27-helpdesk-ui-tls
+  rules:
+    - host: i27helpdesk.in
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: i27-helpdesk-ui
+                port:
+                  number: 80
+    - host: prod.i27helpdesk.in
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: i27-helpdesk-ui
+                port:
+                  number: 80
