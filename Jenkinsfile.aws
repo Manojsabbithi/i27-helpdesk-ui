@@ -1,0 +1,269 @@
+pipeline {
+
+    agent {
+        label 'i27-helpdesk-agent'
+    }
+
+    options {
+        skipDefaultCheckout(true)
+        timestamps()
+        disableConcurrentBuilds()
+    }
+
+    environment {
+        AWS_REGION     = 'ap-south-2'
+        ECR_REPOSITORY = 'i27-helpdesk/ui'
+        K8S_NAMESPACE  = 'i27-helpdesk-dev'
+        KUBECONFIG     = '/home/jenkins/.kube/config'
+    }
+
+    stages {
+
+        stage('Checkout') {
+            steps {
+                checkout scm
+
+                sh '''
+                    echo "===== REPOSITORY ====="
+                    git remote -v
+
+                    echo "===== COMMIT ====="
+                    git log -1 --oneline
+                '''
+            }
+        }
+
+        stage('Discover Gateway ALB') {
+            steps {
+                script {
+
+                    env.ALB_DNS = sh(
+                        script: '''
+                            kubectl get ingress \
+                              i27-helpdesk-gateway \
+                              -n "${K8S_NAMESPACE}" \
+                              -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+                        ''',
+                        returnStdout: true
+                    ).trim()
+
+                    if (!env.ALB_DNS) {
+                        error('Gateway ALB DNS could not be discovered')
+                    }
+
+                    env.NEXT_PUBLIC_API_BASE_URL =
+                        "http://${env.ALB_DNS}"
+
+                    echo "Gateway ALB: ${env.ALB_DNS}"
+                    echo "UI API URL: ${env.NEXT_PUBLIC_API_BASE_URL}"
+                }
+            }
+        }
+
+        stage('SonarQube Analysis') {
+            steps {
+                script {
+                    def scannerHome = tool 'SonarQubeScanner'
+
+                    withSonarQubeEnv('i27-sonarqube') {
+
+                        sh """
+                            ${scannerHome}/bin/sonar-scanner \
+                              -Dsonar.projectKey=i27-helpdesk-ui \
+                              -Dsonar.projectName=i27-helpdesk-ui \
+                              -Dsonar.sources=src \
+                              -Dsonar.exclusions='**/node_modules/**,**/.next/**'
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Quality Gate') {
+            steps {
+                timeout(time: 5, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
+                }
+            }
+        }
+
+        stage('Docker Build') {
+            steps {
+                script {
+
+                    env.IMAGE_TAG = sh(
+                        script: 'git rev-parse --short=8 HEAD',
+                        returnStdout: true
+                    ).trim()
+
+                    env.AWS_ACCOUNT_ID = sh(
+                        script: '''
+                            aws sts get-caller-identity \
+                              --query Account \
+                              --output text
+                        ''',
+                        returnStdout: true
+                    ).trim()
+
+                    env.ECR_REGISTRY =
+                        "${env.AWS_ACCOUNT_ID}.dkr.ecr.${env.AWS_REGION}.amazonaws.com"
+
+                    env.IMAGE_URI =
+                        "${env.ECR_REGISTRY}/${env.ECR_REPOSITORY}:${env.IMAGE_TAG}"
+                }
+
+                sh '''
+                    set -eu
+
+                    echo "===== BUILD UI ====="
+                    echo "Image: ${IMAGE_URI}"
+                    echo "API:   ${NEXT_PUBLIC_API_BASE_URL}"
+
+                    docker build \
+                      --build-arg NEXT_PUBLIC_API_BASE_URL="${NEXT_PUBLIC_API_BASE_URL}" \
+                      -t "${IMAGE_URI}" \
+                      .
+                '''
+            }
+        }
+
+        stage('Push to ECR') {
+            steps {
+                sh '''
+                    set -eu
+
+                    DOCKER_CONFIG_DIR=$(mktemp -d)
+
+                    cleanup() {
+                        rm -rf "${DOCKER_CONFIG_DIR}"
+                    }
+
+                    trap cleanup EXIT
+
+                    export DOCKER_CONFIG="${DOCKER_CONFIG_DIR}"
+
+                    echo "===== LOGIN TO ECR ====="
+
+                    aws ecr get-login-password \
+                      --region "${AWS_REGION}" |
+                    docker login \
+                      --username AWS \
+                      --password-stdin \
+                      "${ECR_REGISTRY}"
+
+                    echo "===== PUSH UI IMAGE ====="
+
+                    docker push "${IMAGE_URI}"
+                '''
+            }
+        }
+
+        stage('Verify ECR Image') {
+            steps {
+                sh '''
+                    echo "===== VERIFY ECR ====="
+
+                    aws ecr describe-images \
+                      --repository-name "${ECR_REPOSITORY}" \
+                      --region "${AWS_REGION}" \
+                      --image-ids imageTag="${IMAGE_TAG}" \
+                      --query 'imageDetails[0].{Tags:imageTags,Digest:imageDigest,Pushed:imagePushedAt}' \
+                      --output table
+                '''
+            }
+        }
+
+        stage('Deploy to EKS') {
+            steps {
+                sh '''
+                    set -eu
+
+                    echo "===== DEPLOY UI ====="
+
+                    RENDERED_MANIFEST=$(mktemp)
+
+                    cleanup() {
+                        rm -f "${RENDERED_MANIFEST}"
+                    }
+
+                    trap cleanup EXIT
+
+                    sed "s|__IMAGE_URI__|${IMAGE_URI}|g" \
+                      k8s/aws/deployment.yaml \
+                      > "${RENDERED_MANIFEST}"
+
+                    if grep -q '__IMAGE_URI__' "${RENDERED_MANIFEST}"; then
+                        echo "ERROR: image placeholder was not replaced"
+                        exit 1
+                    fi
+
+                    echo "===== VALIDATE ====="
+
+                    kubectl apply \
+                      --dry-run=client \
+                      -f "${RENDERED_MANIFEST}"
+
+                    echo "===== SERVICE ====="
+
+                    kubectl apply \
+                      -f k8s/aws/service.yaml
+
+                    echo "===== DEPLOYMENT ====="
+
+                    kubectl apply \
+                      -f "${RENDERED_MANIFEST}"
+
+                    echo "===== WAIT FOR UI ====="
+
+                    kubectl rollout status \
+                      deployment/i27-helpdesk-ui \
+                      -n "${K8S_NAMESPACE}" \
+                      --timeout=300s
+
+                    echo "===== VERIFY IMAGE ====="
+
+                    DEPLOYED_IMAGE=$(kubectl get deployment \
+                      i27-helpdesk-ui \
+                      -n "${K8S_NAMESPACE}" \
+                      -o jsonpath='{.spec.template.spec.containers[0].image}')
+
+                    echo "Expected: ${IMAGE_URI}"
+                    echo "Deployed: ${DEPLOYED_IMAGE}"
+
+                    if [ "${DEPLOYED_IMAGE}" != "${IMAGE_URI}" ]; then
+                        echo "ERROR: deployed image does not match"
+                        exit 1
+                    fi
+
+                    echo "===== UI STATUS ====="
+
+                    kubectl get pods \
+                      -n "${K8S_NAMESPACE}" \
+                      -l app=i27-helpdesk-ui \
+                      -o wide
+
+                    kubectl get service \
+                      i27-helpdesk-ui \
+                      -n "${K8S_NAMESPACE}"
+
+                    echo "UI deployment successful ✅"
+                '''
+            }
+        }
+    }
+
+    post {
+
+        success {
+            echo 'UI AWS CI/CD pipeline completed successfully.'
+        }
+
+        failure {
+            echo 'UI pipeline failed. Check the failed stage above.'
+        }
+
+        always {
+            echo 'Pipeline execution finished.'
+        }
+    }
+}
