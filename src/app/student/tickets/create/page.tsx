@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import api from "@/lib/api";
 import DashboardLayout from "@/components/layout/DashboardLayout";
-import { Send, X, AlertCircle } from "lucide-react";
+import { Send, X, AlertCircle, Paperclip } from "lucide-react";
 
 export default function CreateTicketPage() {
   const router = useRouter();
@@ -12,16 +12,42 @@ export default function CreateTicketPage() {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState("MEDIUM");
+  const [attachment, setAttachment] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    if (attachment && attachment.size > 10 * 1024 * 1024) {
+      setError("Attachment must be 10 MB or smaller");
+      return;
+    }
+
     setLoading(true);
 
     try {
-      await api.post("/tickets", { title, description, priority });
+      const ticketResponse = await api.post("/tickets", {
+        title,
+        description,
+        priority,
+      });
+
+      const ticketId = ticketResponse.data?.id;
+
+      if (!ticketId) {
+        throw new Error("Ticket was created but no ticket ID was returned");
+      }
+
+      if (attachment) {
+        const formData = new FormData();
+        formData.append("ticketId", String(ticketId));
+        formData.append("file", attachment);
+
+        await api.post("/attachments", formData);
+      }
+
       router.push("/student/dashboard?created=true");
     } catch (err: any) {
       setError(err.response?.data?.message || "Unable to create ticket");
@@ -112,6 +138,42 @@ export default function CreateTicketPage() {
                 <option value="billing">Billing / Payment</option>
                 <option value="other">Other</option>
               </select>
+            </div>
+
+            {/* Attachment */}
+            <div>
+              <label className="input-label">Attachment (optional)</label>
+
+              <label className="flex items-center gap-3 border border-dashed border-gray-300 rounded-lg px-4 py-4 cursor-pointer hover:bg-gray-50">
+                <Paperclip size={18} className="text-gray-500" />
+
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-700">
+                    {attachment ? attachment.name : "Choose a file"}
+                  </p>
+                  <p className="text-xs text-gray-400">
+                    Maximum file size: 10 MB
+                  </p>
+                </div>
+
+                <input
+                  type="file"
+                  className="hidden"
+                  onChange={(e) =>
+                    setAttachment(e.target.files?.[0] || null)
+                  }
+                />
+              </label>
+
+              {attachment && (
+                <button
+                  type="button"
+                  className="text-xs text-red-500 mt-2"
+                  onClick={() => setAttachment(null)}
+                >
+                  Remove attachment
+                </button>
+              )}
             </div>
 
             {/* Actions */}
