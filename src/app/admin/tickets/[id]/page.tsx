@@ -7,6 +7,7 @@ import DashboardLayout from "@/components/layout/DashboardLayout";
 import StatusBadge from "@/components/ui/StatusBadge";
 import PriorityBadge from "@/components/ui/PriorityBadge";
 import { SkeletonBlock } from "@/components/ui/LoadingSkeleton";
+import TicketAttachments from "@/components/tickets/TicketAttachments";
 import {
   ArrowLeft,
   Send,
@@ -185,8 +186,9 @@ export default function AdminTicketDetailsPage() {
 
       {/* Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left: Comments */}
+        {/* Left: Attachments + Comments */}
         <div className="lg:col-span-2 space-y-6">
+          <TicketAttachments ticketId={Number(id)} />
           <div className="card overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-2">
               <MessageSquare size={18} className="text-gray-500" />

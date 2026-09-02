@@ -19,6 +19,7 @@ const customJestConfig = {
     "src/app/student/tickets/create/page.tsx",
     "src/app/student/tickets/[id]/page.tsx",
     "src/app/agent/tickets/[id]/page.tsx",
+    "src/app/admin/tickets/[id]/page.tsx",
     "src/components/tickets/TicketAttachments.tsx",
   ],
 };

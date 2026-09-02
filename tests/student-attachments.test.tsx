@@ -470,6 +470,7 @@ test("shows an error when attachment download fails", async () => {
 });
 
 import AgentTicketDetailsPage from "@/app/agent/tickets/[id]/page";
+import AdminTicketDetailsPage from "@/app/admin/tickets/[id]/page";
 
 test("agent can list and download ticket attachments", async () => {
   const user = userEvent.setup();
@@ -617,4 +618,80 @@ test("agent sees attachment service error", async () => {
   expect(
     await screen.findByText("Attachments unavailable")
   ).toBeInTheDocument();
+});
+
+test("admin can view ticket attachments", async () => {
+  localStorage.setItem(
+    "user",
+    JSON.stringify({
+      userId: 5,
+      roles: ["ADMIN"],
+      fullName: "AWS Demo Admin",
+    })
+  );
+
+  mockGet.mockImplementation((url: string) => {
+    if (url === "/tickets/3") {
+      return Promise.resolve({
+        data: {
+          id: 3,
+          title: "Browser S3 Attachment Test",
+          description: "Attachment test",
+          status: "CLOSED",
+          priority: "MEDIUM",
+          createdBy: 7,
+          assignedTo: 6,
+        },
+      });
+    }
+
+    if (url === "/auth/users/7") {
+      return Promise.resolve({
+        data: {
+          id: 7,
+          fullName: "AWS Demo Student",
+        },
+      });
+    }
+
+    if (url === "/auth/users?role=AGENT") {
+      return Promise.resolve({ data: [] });
+    }
+
+    if (url === "/tickets/3/activities") {
+      return Promise.resolve({ data: [] });
+    }
+
+    if (url === "/comments/3") {
+      return Promise.resolve({ data: [] });
+    }
+
+    if (url === "/attachments") {
+      return Promise.resolve({
+        data: [
+          {
+            id: "admin-attachment",
+            fileName: "i27-ui-s3-test.txt",
+            contentType: "text/plain",
+            size: 51,
+            ticketId: 3,
+          },
+        ],
+      });
+    }
+
+    return Promise.resolve({ data: {} });
+  });
+
+  render(<AdminTicketDetailsPage />);
+
+  expect(
+    await screen.findByText("i27-ui-s3-test.txt")
+  ).toBeInTheDocument();
+
+  expect(mockGet).toHaveBeenCalledWith("/attachments", {
+    params: {
+      ticketId: 3,
+    },
+  });
 });
