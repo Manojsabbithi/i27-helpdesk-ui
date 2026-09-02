@@ -60,6 +60,24 @@ pipeline {
             }
         }
 
+        stage('UI Tests & Coverage') {
+            steps {
+                sh '''
+                    set -eu
+
+                    echo "===== INSTALL UI DEPENDENCIES ====="
+                    npm ci
+
+                    echo "===== UI TESTS + COVERAGE ====="
+                    rm -rf coverage
+                    npm run test:coverage
+
+                    test -s coverage/lcov.info
+                    echo "UI tests and LCOV coverage generated ✅"
+                '''
+            }
+        }
+
         stage('SonarQube Analysis') {
             steps {
                 script {
