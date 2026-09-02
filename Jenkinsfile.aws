@@ -65,12 +65,11 @@ pipeline {
                 sh '''
                     set -eu
 
-                    echo "===== INSTALL UI DEPENDENCIES ====="
-                    npm ci
-
                     echo "===== UI TESTS + COVERAGE ====="
+
                     rm -rf coverage
-                    npm run test:coverage
+
+                    docker run --rm                       --user "$(id -u):$(id -g)"                       -e HOME=/tmp                       -v "$PWD:/workspace"                       -w /workspace                       node:18-alpine                       sh -c 'npm ci && npm run test:coverage'
 
                     test -s coverage/lcov.info
                     echo "UI tests and LCOV coverage generated ✅"
