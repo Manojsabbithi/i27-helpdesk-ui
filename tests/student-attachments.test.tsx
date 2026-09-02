@@ -468,3 +468,153 @@ test("shows an error when attachment download fails", async () => {
     await screen.findByText("Unable to download attachment")
   ).toBeInTheDocument();
 });
+
+import AgentTicketDetailsPage from "@/app/agent/tickets/[id]/page";
+
+test("agent can list and download ticket attachments", async () => {
+  const user = userEvent.setup();
+
+  localStorage.setItem(
+    "user",
+    JSON.stringify({
+      userId: 6,
+      roles: ["AGENT"],
+      fullName: "AWS Demo Agent",
+    })
+  );
+
+  mockGet.mockImplementation((url: string) => {
+    if (url === "/tickets/3") {
+      return Promise.resolve({
+        data: {
+          id: 3,
+          title: "Browser S3 Attachment Test",
+          description: "Attachment test",
+          status: "CLOSED",
+          priority: "MEDIUM",
+          createdBy: 7,
+        },
+      });
+    }
+
+    if (url === "/auth/users/7") {
+      return Promise.resolve({
+        data: {
+          id: 7,
+          fullName: "AWS Demo Student",
+        },
+      });
+    }
+
+    if (url === "/tickets/3/activities") {
+      return Promise.resolve({ data: [] });
+    }
+
+    if (url === "/comments/3") {
+      return Promise.resolve({ data: [] });
+    }
+
+    if (url === "/attachments") {
+      return Promise.resolve({
+        data: [
+          {
+            id: "agent-attachment",
+            fileName: "i27-ui-s3-test.txt",
+            contentType: "text/plain",
+            size: 51,
+            ticketId: 3,
+          },
+        ],
+      });
+    }
+
+    if (url === "/attachments/agent-attachment") {
+      return Promise.resolve({
+        data: new Blob(["attachment"], {
+          type: "text/plain",
+        }),
+      });
+    }
+
+    return Promise.resolve({ data: {} });
+  });
+
+  render(<AgentTicketDetailsPage />);
+
+  expect(
+    await screen.findByText("i27-ui-s3-test.txt")
+  ).toBeInTheDocument();
+
+  expect(screen.getByText(/51 B/)).toBeInTheDocument();
+
+  await user.click(
+    screen.getByRole("button", {
+      name: /download/i,
+    })
+  );
+
+  await waitFor(() => {
+    expect(mockGet).toHaveBeenCalledWith(
+      "/attachments/agent-attachment",
+      {
+        responseType: "blob",
+      }
+    );
+  });
+});
+
+
+test("agent sees attachment service error", async () => {
+  localStorage.setItem(
+    "user",
+    JSON.stringify({
+      userId: 6,
+      roles: ["AGENT"],
+    })
+  );
+
+  mockGet.mockImplementation((url: string) => {
+    if (url === "/tickets/3") {
+      return Promise.resolve({
+        data: {
+          id: 3,
+          title: "Attachment Test",
+          description: "Testing",
+          status: "OPEN",
+          priority: "MEDIUM",
+          createdBy: 7,
+        },
+      });
+    }
+
+    if (url === "/auth/users/7") {
+      return Promise.resolve({
+        data: {
+          fullName: "AWS Demo Student",
+        },
+      });
+    }
+
+    if (url === "/tickets/3/activities") {
+      return Promise.resolve({ data: [] });
+    }
+
+    if (url === "/comments/3") {
+      return Promise.resolve({ data: [] });
+    }
+
+    if (url === "/attachments") {
+      return Promise.reject(
+        new Error("Attachment service unavailable")
+      );
+    }
+
+    return Promise.resolve({ data: {} });
+  });
+
+  render(<AgentTicketDetailsPage />);
+
+  expect(
+    await screen.findByText("Attachments unavailable")
+  ).toBeInTheDocument();
+});

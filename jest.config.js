@@ -18,6 +18,7 @@ const customJestConfig = {
   collectCoverageFrom: [
     "src/app/student/tickets/create/page.tsx",
     "src/app/student/tickets/[id]/page.tsx",
+    "src/app/agent/tickets/[id]/page.tsx",
   ],
 };
 
