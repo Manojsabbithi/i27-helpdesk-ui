@@ -10,7 +10,7 @@ interface TicketAttachmentsProps {
 
 export default function TicketAttachments({
   ticketId,
-}: TicketAttachmentsProps) {
+}: Readonly<TicketAttachmentsProps>) {
   const [attachments, setAttachments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
