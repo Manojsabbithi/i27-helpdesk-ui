@@ -142,7 +142,7 @@ export default function CreateTicketPage() {
 
             {/* Attachment */}
             <div>
-              <label className="input-label">Attachment (optional)</label>
+              <p className="input-label">Attachment (optional)</p>
 
               <label className="flex items-center gap-3 border border-dashed border-gray-300 rounded-lg px-4 py-4 cursor-pointer hover:bg-gray-50">
                 <Paperclip size={18} className="text-gray-500" />
