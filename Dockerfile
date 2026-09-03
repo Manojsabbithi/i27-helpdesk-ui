@@ -8,9 +8,7 @@ RUN npm install
 
 COPY . .
 
-# ✅ Use Build Arguments for Next.js (Bundled at build time)
-ARG NEXT_PUBLIC_API_BASE_URL
-ENV NEXT_PUBLIC_API_BASE_URL=$NEXT_PUBLIC_API_BASE_URL
+# Build the Next.js application
 
 RUN npm run build
 

@@ -33,33 +33,6 @@ pipeline {
             }
         }
 
-        stage('Discover Gateway ALB') {
-            steps {
-                script {
-
-                    env.ALB_DNS = sh(
-                        script: '''
-                            kubectl get ingress \
-                              i27-helpdesk-gateway \
-                              -n "${K8S_NAMESPACE}" \
-                              -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
-                        ''',
-                        returnStdout: true
-                    ).trim()
-
-                    if (!env.ALB_DNS) {
-                        error('Gateway ALB DNS could not be discovered')
-                    }
-
-                    env.NEXT_PUBLIC_API_BASE_URL =
-                        "http://${env.ALB_DNS}"
-
-                    echo "Gateway ALB: ${env.ALB_DNS}"
-                    echo "UI API URL: ${env.NEXT_PUBLIC_API_BASE_URL}"
-                }
-            }
-        }
-
         stage('UI Tests & Coverage') {
             steps {
                 sh '''
@@ -134,10 +107,7 @@ pipeline {
 
                     echo "===== BUILD UI ====="
                     echo "Image: ${IMAGE_URI}"
-                    echo "API:   ${NEXT_PUBLIC_API_BASE_URL}"
-
                     docker build \
-                      --build-arg NEXT_PUBLIC_API_BASE_URL="${NEXT_PUBLIC_API_BASE_URL}" \
                       -t "${IMAGE_URI}" \
                       .
                 '''
